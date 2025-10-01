@@ -1,0 +1,7 @@
+- [] Modern admin panel . Feature top navigation, (logo, shortcuts, allow to add more), links are Create new epaper . Moderate, publish on top navigation.
+- [] The admin dashboard now includes a left-aligned, collapsible sidebar navigation
+- [] Pure react based react  project setup , including react router. 
+- [] Black and white theme only.
+- [] Icon supported
+- [] Improbised UI
+- [] Multi langual বাংলা is primary and then English. 

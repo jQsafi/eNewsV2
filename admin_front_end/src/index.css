@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* Custom components for black and white theme */
+@layer components {
+  .btn {
+    @apply px-4 py-2 border border-black bg-white text-black cursor-pointer transition-all duration-200 hover:bg-black hover:text-white;
+  }
+  
+  .btn-primary {
+    @apply bg-black text-white hover:bg-white hover:text-black hover:border-black;
+  }
+  
+  .input {
+    @apply px-3 py-2 border border-black bg-white text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent;
+  }
+  
+  .card {
+    @apply border border-black bg-white p-4 shadow-sm;
+  }
+  
+  .sidebar {
+    @apply bg-white border-r border-black min-h-screen;
+  }
+  
+  .top-nav {
+    @apply bg-white border-b border-black p-4;
+  }
+}
+
+/* Custom utilities */
+@layer utilities {
+  .text-shadow {
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+  }
+}

@@ -1,0 +1,16 @@
+- [x] AN EMAIL AND OTP SERVICE FOR AUTHENTICATION with JWT token.
+
+ - [x] Implement login endpoints sending otp via email and generate JWT verification method.
+- [x] Add middleware for token validation on protected routes
+- [x] Define roles: super-admin, admin, editor, viewer
+- [x] Restrict route access based on user roles
+- [x] Add rate limiting for login attempts
+- [x] Create user profile management endpoints
+- [x] Add user profile update endpoints (name, email, avatar) (avatar upload pending)
+- [x] Implement user profile picture upload with file validation
+- [x] Add endpoint to fetch user profile data
+- Create endpoint for updating user preferences
+- Add user activity logging for profile changes
+- Implement activity log pagination and filtering
+- Add endpoint to export user activity logs as CSV
+- Create dashboard widget for recent user activities
