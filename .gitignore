@@ -1,0 +1,6 @@
+
+# macOS
+.DS_Store
+
+# build artifacts
+admin_front_end/dist

@@ -50,7 +50,7 @@ const bn = {
 
     // CreateEpaper
     "createEpaper.step1": "মৌলিক তথ্য",
-    "createEpaper.step2": "বিষয়বস্তু নির্বাচন",
+    "createEpaper.step2": "মিডিয়া",
     "createEpaper.step3": "লেআউট কনফিগারেশন",
     "createEpaper.step4": "পূর্বরূপ এবং পর্যালোচনা",
     "createEpaper.step5": "প্রকাশনা সেটিংস",
