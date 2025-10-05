@@ -6,6 +6,7 @@ import CreateEpaper from './pages/CreateEpaper';
 import Moderate from './pages/Moderate';
 import Publish from './pages/Publish';
 import Settings from './pages/Settings';
+import DropZoneTest from './components/createEpaper/__tests__/DropZoneTest';
 import './i18n';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           <Route path="/moderate" element={<Moderate />} />
           <Route path="/publish" element={<Publish />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/test-dropzone" element={<DropZoneTest />} />
         </Routes>
       </Layout>
     </Router>

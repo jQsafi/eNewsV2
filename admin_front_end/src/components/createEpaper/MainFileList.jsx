@@ -32,7 +32,7 @@ const MainFileList = ({ files, onRemove, onReorder }) => {
   return (
     <div className="mt-4">
       <p className="text-sm text-gray-600">Selected files: {files.length}</p>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
         {files.map((file, index) => (
           <div
             key={index}
@@ -45,14 +45,17 @@ const MainFileList = ({ files, onRemove, onReorder }) => {
           >
             <div className="w-full h-48 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
               <img
-                src={URL.createObjectURL(file)}
+                src={file instanceof File ? URL.createObjectURL(file) : file.preview || ''}
                 alt={`Preview ${index + 1}`}
                 className="w-full h-full object-contain"
               />
             </div>
             <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-2 rounded-b-lg">
               <p className="truncate">{file.name}</p>
-              <p className="text-gray-300">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+              <p className="text-gray-300">
+                Original: {(file.originalSize / 1024 / 1024).toFixed(2)} MB<br />
+                Compressed: {(file.compressedSize / 1024 / 1024).toFixed(2)} MB
+              </p>
             </div>
             <button
               type="button"

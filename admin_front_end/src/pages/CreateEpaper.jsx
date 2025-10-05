@@ -1,14 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Save, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { format, parseISO, startOfMonth, startOfWeek, endOfMonth, endOfWeek, addDays, addMonths, isSameMonth, isSameDay } from 'date-fns';
+
+// Components
+import StepIndicator from '../components/createEpaper/StepIndicator';
+import CalendarHeader from '../components/createEpaper/calendar/CalendarHeader';
+import DayCell from '../components/createEpaper/calendar/DayCell';
 
 import DropZone from '../components/createEpaper/DropZone';
 import MainFileList from '../components/createEpaper/MainFileList';
 import AdditionalFileList from '../components/createEpaper/AdditionalFileList';
 
+// Step Components
+import BasicInformation from '../components/createEpaper/steps/BasicInformation';
+import UploadStep from '../components/createEpaper/steps/UploadStep';
+import LayoutConfiguration from '../components/createEpaper/steps/LayoutConfiguration';
+import Checklist from '../components/createEpaper/steps/Checklist';
+import PreviewAndReview from '../components/createEpaper/steps/PreviewAndReview';
+import PublishSettings from '../components/createEpaper/steps/PublishSettings';
+
 const CreateEpaper = () => {
   const { t } = useTranslation();
   const [currentStep, setCurrentStep] = useState(0);
+  // Initialize form data state without localStorage persistence
   const [formData, setFormData] = useState({
     title: '',
     publicationDate: '',
@@ -34,7 +49,7 @@ const CreateEpaper = () => {
   const [imageInfos, setImageInfos] = useState([]);
   const [additionalImageInfos, setAdditionalImageInfos] = useState([]);
 
-  // Build metadata (preview URL, dimensions, type, size, lastModified) for main images
+  // Fix: Ensure additionalImages do not update imageInfos (Grid 1 preview)
   useEffect(() => {
     let created = [];
     let cancelled = false;
@@ -42,36 +57,89 @@ const CreateEpaper = () => {
     const buildInfos = async () => {
       const infos = await Promise.all(formData.images.map((file) => {
         return new Promise((resolve) => {
-          const preview = URL.createObjectURL(file);
-          created.push(preview);
+          // Check if file is a File object before creating object URL
+          if (file instanceof File) {
+          // Check if file is a File object before creating object URL
+          if (file instanceof File) {
+            const preview = URL.createObjectURL(file);
+            created.push(preview);
 
-          const img = new Image();
-          img.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+              resolve({
+                name: file.name,
+                size: file.size,
+                sizeMB: (file.size / 1024 / 1024).toFixed(2),
+                type: file.type || 'unknown',
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+                lastModified: file.lastModified,
+                preview
+              });
+            };
+            img.onerror = () => {
+              resolve({
+                name: file.name,
+                size: file.size,
+                sizeMB: (file.size / 1024 / 1024).toFixed(2),
+                type: file.type || 'unknown',
+                width: null,
+                height: null,
+                lastModified: file.lastModified,
+                preview
+              });
+            };
+            img.src = preview;
+          } else if (typeof file.preview === 'string' && file.preview.startsWith('data:')) {
+            // If preview is base64 string, resolve with it directly
             resolve({
-              name: file.name,
-              size: file.size,
-              sizeMB: (file.size / 1024 / 1024).toFixed(2),
-              type: file.type || 'unknown',
-              width: img.naturalWidth,
-              height: img.naturalHeight,
-              lastModified: file.lastModified,
-              preview
-            });
-          };
-          img.onerror = () => {
-            // fallback if image can't be loaded
-            resolve({
-              name: file.name,
-              size: file.size,
-              sizeMB: (file.size / 1024 / 1024).toFixed(2),
+              name: file.name || 'unknown',
+              size: file.size || 0,
+              sizeMB: '0.00',
               type: file.type || 'unknown',
               width: null,
               height: null,
-              lastModified: file.lastModified,
-              preview
+              lastModified: file.lastModified || null,
+              preview: file.preview
             });
-          };
-          img.src = preview;
+          } else {
+            // If not a File object or base64 string, resolve with minimal info and empty preview
+            resolve({
+              name: file.name || 'unknown',
+              size: file.size || 0,
+              sizeMB: '0.00',
+              type: file.type || 'unknown',
+              width: null,
+              height: null,
+              lastModified: file.lastModified || null,
+              preview: ''
+            });
+          }
+          } else if (typeof file.preview === 'string' && file.preview.startsWith('data:')) {
+            // If preview is base64 string, resolve with it directly
+            resolve({
+              name: file.name || 'unknown',
+              size: file.size || 0,
+              sizeMB: '0.00',
+              type: file.type || 'unknown',
+              width: null,
+              height: null,
+              lastModified: file.lastModified || null,
+              preview: file.preview
+            });
+          } else {
+            // If not a File object or base64 string, resolve with minimal info and empty preview
+            resolve({
+              name: file.name || 'unknown',
+              size: file.size || 0,
+              sizeMB: '0.00',
+              type: file.type || 'unknown',
+              width: null,
+              height: null,
+              lastModified: file.lastModified || null,
+              preview: ''
+            });
+          }
         });
       }));
 
@@ -86,6 +154,217 @@ const CreateEpaper = () => {
     };
   }, [formData.images]);
 
+  // Fix: Ensure additionalImages build their own infos separately
+  useEffect(() => {
+    let created = [];
+    let cancelled = false;
+
+    const buildInfos = async () => {
+      const infos = await Promise.all(formData.additionalImages.map((file) => {
+        return new Promise((resolve) => {
+          // Check if file is a File object before creating object URL
+          if (file instanceof File) {
+            const preview = URL.createObjectURL(file);
+            created.push(preview);
+
+            const img = new Image();
+            img.onload = () => {
+              resolve({
+                name: file.name,
+                size: file.size,
+                sizeMB: (file.size / 1024 / 1024).toFixed(2),
+                type: file.type || 'unknown',
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+                lastModified: file.lastModified,
+                preview
+              });
+            };
+            img.onerror = () => {
+              resolve({
+                name: file.name,
+                size: file.size,
+                sizeMB: (file.size / 1024 / 1024).toFixed(2),
+                type: file.type || 'unknown',
+                width: null,
+                height: null,
+                lastModified: file.lastModified,
+                preview
+              });
+            };
+            img.src = preview;
+          } else if (typeof file.preview === 'string' && file.preview.startsWith('data:')) {
+            // If preview is base64 string, resolve with it directly
+            resolve({
+              name: file.name || 'unknown',
+              size: file.size || 0,
+              sizeMB: '0.00',
+              type: file.type || 'unknown',
+              width: null,
+              height: null,
+              lastModified: file.lastModified || null,
+              preview: file.preview
+            });
+          } else {
+            // If not a File object or base64 string, resolve with minimal info and empty preview
+            resolve({
+              name: file.name || 'unknown',
+              size: file.size || 0,
+              sizeMB: '0.00',
+              type: file.type || 'unknown',
+              width: null,
+              height: null,
+              lastModified: file.lastModified || null,
+              preview: ''
+            });
+          }
+        });
+      }));
+
+      if (!cancelled) setAdditionalImageInfos(infos);
+    };
+
+    buildInfos();
+
+    return () => {
+      cancelled = true;
+      created.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [formData.additionalImages]);
+
+  // Full-screen datepicker state
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const parsed = formData.publicationDate ? parseISO(formData.publicationDate) : new Date();
+    return startOfMonth(parsed);
+  });
+
+  const [displayPublicationDate, setDisplayPublicationDate] = useState('');
+
+  const openDatePicker = () => setShowDatePicker(true);
+  const closeDatePicker = () => setShowDatePicker(false);
+  const prevMonth = () => setCalendarMonth(m => addMonths(m, -1));
+  const nextMonth = () => setCalendarMonth(m => addMonths(m, 1));
+
+  const getBanglaWeekday = (d) => {
+    const names = ['রবিবার','সোমবার','মঙ্গলবার','বুধবার','বৃহস্পতিবার','শুক্রবার','শনিবার'];
+    return names[d.getDay()];
+  };
+
+  const setDateValue = (date) => {
+    const isoValue = format(date, 'yyyy-MM-dd');
+    const gregMonthNamesBn = ['জানুয়ারি','ফেব্রুয়ারি','মার্চ','এপ্রিল','মে','জুন','জুলাই','আগস্ট','সেপ্টেম্বর','অক্টোবর','নভেম্বর','ডিসেম্বর'];
+    const { bDay, bMonthName, bYear } = gregorianToBangla(date);
+    const { hDay, hMonth, hYear } = gregorianToHijri(date);
+    const hijriMonthNamesBn = ['মহররম','সফর','রবিউল আওয়াল','রবিউস সানি','জুমাদাল উলা','জুমাদাল উখরা','রজব','শা’বান','রামাদান','শাওয়াল','জিলকদ','জিলহজ্জ'];
+    const gDayBn = toBanglaDigits(format(date, 'd'));
+    const gMonthBn = gregMonthNamesBn[date.getMonth()];
+    const gYearBn = toBanglaDigits(format(date, 'yyyy'));
+    const hDayBn = toBanglaDigits(hDay);
+    const hMonthBn = hijriMonthNamesBn[Math.max(0, Math.min(11, hMonth - 1))];
+    const hYearBn = toBanglaDigits(hYear);
+    const weekdayBn = getBanglaWeekday(date);
+
+    const display = `${gDayBn} ${gMonthBn} ${gYearBn}, ${toBanglaDigits(bDay)} ${bMonthName} ${toBanglaDigits(bYear)} এবং হিজরি ${hDayBn} ${hMonthBn} ${hYearBn} - ${weekdayBn}`;
+
+    setFormData(prev => ({ ...prev, publicationDate: isoValue }));
+    setDisplayPublicationDate(display);
+    setShowDatePicker(false);
+  };
+
+  const toBanglaDigits = (str) => {
+    const map = {'0':'০','1':'১','2':'২','3':'৩','4':'৪','5':'৫','6':'৬','7':'৭','8':'৮','9':'৯'};
+    return String(str).replace(/[0-9]/g, d => map[d]);
+  };
+
+  const toArabicIndicDigits = (str) => {
+    const map = {'0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩'};
+    return String(str).replace(/[0-9]/g, d => map[d]);
+  };
+
+  const isGregorianLeap = (year) => {
+    return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+  };
+
+  // Approximate Bangla (Bengali) calendar conversion (Bangladesh version, Boishakh starts Apr 14)
+  const gregorianToBangla = (gDate) => {
+    const gYear = gDate.getFullYear();
+    const banglaEpochMonth = 3; // April (0-based)
+    const banglaEpochDay = 14;
+    const epochThisYear = new Date(gYear, banglaEpochMonth, banglaEpochDay);
+    let banglaYear = gYear - 593;
+    let startEpoch = epochThisYear;
+    if (gDate < epochThisYear) {
+      banglaYear = gYear - 594;
+      startEpoch = new Date(gYear - 1, banglaEpochMonth, banglaEpochDay);
+    }
+    const daysSinceStart = Math.floor((gDate - startEpoch) / (1000 * 60 * 60 * 24));
+    // Month lengths (BD revised: first 5 months 31, next 6 months 30, Falgun 29 normally, 30 on leap years)
+    const falgunLength = isGregorianLeap(gYear) ? 30 : 29;
+    const monthLengths = [31,31,31,31,31,30,30,30,30,30,falgunLength,30];
+    const monthNamesBn = ['বৈশাখ','জ্যৈষ্ঠ','আষাঢ়','শ্রাবণ','ভাদ্র','আশ্বিন','কার্তিক','অগ্রহায়ণ','পৌষ','মাঘ','ফাল্গুন','চৈত্র'];
+
+    let remaining = daysSinceStart;
+    let bMonth = 0;
+    while (remaining >= monthLengths[bMonth]) {
+      remaining -= monthLengths[bMonth];
+      bMonth += 1;
+      if (bMonth > 11) break;
+    }
+    const bDay = remaining + 1;
+    return { bYear: banglaYear, bMonth: bMonth + 1, bDay, bMonthName: monthNamesBn[Math.min(bMonth, 11)] };
+  };
+
+  // Simple (tabular) Hijri conversion, approximate. Returns { hYear, hMonth, hDay }
+  const gregorianToHijri = (gDate) => {
+    // Algorithm based on Kuwaiti algorithm approximation
+    const day = gDate.getDate();
+    const month = gDate.getMonth();
+    const year = gDate.getFullYear();
+    let m = month + 1;
+    let y = year;
+    if (m < 3) {
+      y -= 1;
+      m += 12;
+    }
+    const a = Math.floor(y / 100);
+    const b = 2 - a + Math.floor(a / 4);
+    const jd = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + day + b - 1524.5;
+    const islamicEpoch = 1948439.5; // Julian day of 1 Muharram 1 AH
+    let daysSince = Math.floor(jd) - Math.floor(islamicEpoch);
+    let hYear = Math.floor((30 * daysSince + 10646) / 10631);
+    let firstDayOfYear = islamicToJulianDay(hYear, 1, 1);
+    let dayOfYear = Math.floor(jd) - Math.floor(firstDayOfYear) + 1;
+    let hMonth = 1;
+    while (hMonth <= 12 && dayOfYear > islamicMonthLength(hYear, hMonth)) {
+      dayOfYear -= islamicMonthLength(hYear, hMonth);
+      hMonth += 1;
+    }
+    const hDay = dayOfYear;
+    return { hYear, hMonth, hDay };
+  };
+
+  const islamicToJulianDay = (iy, im, id) => {
+    const islamicEpoch = 1948439.5;
+    return id + Math.ceil(29.5 * (im - 1)) + (iy - 1) * 354 + Math.floor((3 + 11 * iy) / 30) + islamicEpoch - 1;
+  };
+
+  const islamicMonthLength = (iy, im) => {
+    // 30/29 alternating with leap years in a 30-year cycle
+    if (im % 2 === 1) return 30; // odd months 30 days
+    // even months 29, but Dhu al-Hijjah (12th) has 30 in leap years
+    if (im === 12 && isIslamicLeapYear(iy)) return 30;
+    return 29;
+  };
+
+  const isIslamicLeapYear = (iy) => {
+    // leap years in years: 2,5,7,10,13,16,18,21,24,26,29 of 30-year cycle
+    const y = (iy + 11) % 30;
+    return [2,5,7,10,13,16,18,21,24,26,29].includes(y);
+  };
+
+
+
   // Build metadata for additional images
   useEffect(() => {
     let created = [];
@@ -94,35 +373,62 @@ const CreateEpaper = () => {
     const buildInfos = async () => {
       const infos = await Promise.all(formData.additionalImages.map((file) => {
         return new Promise((resolve) => {
-          const preview = URL.createObjectURL(file);
-          created.push(preview);
+          // Check if file is a File object before creating object URL
+          if (file instanceof File) {
+            const preview = URL.createObjectURL(file);
+            created.push(preview);
 
-          const img = new Image();
-          img.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+              resolve({
+                name: file.name,
+                size: file.size,
+                sizeMB: (file.size / 1024 / 1024).toFixed(2),
+                type: file.type || 'unknown',
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+                lastModified: file.lastModified,
+                preview
+              });
+            };
+            img.onerror = () => {
+              resolve({
+                name: file.name,
+                size: file.size,
+                sizeMB: (file.size / 1024 / 1024).toFixed(2),
+                type: file.type || 'unknown',
+                width: null,
+                height: null,
+                lastModified: file.lastModified,
+                preview
+              });
+            };
+            img.src = preview;
+          } else if (typeof file.preview === 'string' && file.preview.startsWith('data:')) {
+            // If preview is base64 string, resolve with it directly
             resolve({
-              name: file.name,
-              size: file.size,
-              sizeMB: (file.size / 1024 / 1024).toFixed(2),
-              type: file.type || 'unknown',
-              width: img.naturalWidth,
-              height: img.naturalHeight,
-              lastModified: file.lastModified,
-              preview
-            });
-          };
-          img.onerror = () => {
-            resolve({
-              name: file.name,
-              size: file.size,
-              sizeMB: (file.size / 1024 / 1024).toFixed(2),
+              name: file.name || 'unknown',
+              size: file.size || 0,
+              sizeMB: '0.00',
               type: file.type || 'unknown',
               width: null,
               height: null,
-              lastModified: file.lastModified,
-              preview
+              lastModified: file.lastModified || null,
+              preview: file.preview
             });
-          };
-          img.src = preview;
+          } else {
+            // If not a File object or base64 string, resolve with minimal info and empty preview
+            resolve({
+              name: file.name || 'unknown',
+              size: file.size || 0,
+              sizeMB: '0.00',
+              type: file.type || 'unknown',
+              width: null,
+              height: null,
+              lastModified: file.lastModified || null,
+              preview: ''
+            });
+          }
         });
       }));
 
@@ -149,9 +455,96 @@ const CreateEpaper = () => {
     { id: 1, title: t('createEpaper.step1') || 'Basic Information', key: 'step1' },
     { id: 2, title: t('createEpaper.step2') || 'Upload', key: 'step2' },
     { id: 3, title: t('createEpaper.step3') || 'Layout Configuration', key: 'step3' },
-    { id: 4, title: t('createEpaper.step4') || 'Preview and Review', key: 'step4' },
-    { id: 5, title: t('createEpaper.step5') || 'Publish Settings', key: 'step5' }
+    { id: 4, title: t('createEpaper.step4') || 'Checklist', key: 'step4' },
+    { id: 5, title: t('createEpaper.step5') || 'Preview and Review', key: 'step5' },
+    { id: 6, title: t('createEpaper.step6') || 'Publish Settings', key: 'step6' }
   ];
+
+  // Helper function to compress image quality and convert to base64 (maintains original dimensions)
+  const compressImage = (file, quality = 0.8) => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+
+      img.onload = () => {
+        // Use original dimensions
+        const { naturalWidth: width, naturalHeight: height } = img;
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // Draw and compress the image (maintains original aspect ratio)
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert to base64 with quality compression (WebP format for better compression)
+        canvas.toBlob(
+          (blob) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          },
+          'image/webp',
+          quality
+        );
+      };
+
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  // Helper function to convert file to base64 string (with compression for images)
+  const fileToBase64 = async (file) => {
+    if (file.type.startsWith('image/')) {
+      // Compress images
+      return await compressImage(file);
+    } else {
+      // For non-image files, use regular base64 conversion
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+      });
+    }
+  };
+
+  // Override DropZone onFilesSelected handlers to convert files to base64 before adding to formData
+  const handleMainFilesSelected = async (files) => {
+    const existingCount = formData.images.length;
+    const base64Files = await Promise.all(Array.from(files).map(async (file, index) => {
+      const base64 = await fileToBase64(file);
+      // Calculate compressed size from base64 string
+      const compressedSize = Math.round((base64.length * 3) / 4); // Approximate size from base64
+      return {
+        ...file,
+        name: `page-${existingCount + index + 1}`,
+        originalSize: file.size,
+        compressedSize,
+        preview: base64
+      };
+    }));
+    setFormData(prev => ({ ...prev, images: [...prev.images, ...base64Files] }));
+  };
+
+  const handleAdditionalFilesSelected = async (files) => {
+    const existingCount = formData.additionalImages.length;
+    const base64Files = await Promise.all(Array.from(files).map(async (file, index) => {
+      const base64 = await fileToBase64(file);
+      // Calculate compressed size from base64 string
+      const compressedSize = Math.round((base64.length * 3) / 4); // Approximate size from base64
+      return {
+        ...file,
+        name: `page-${existingCount + index + 1}`,
+        originalSize: file.size,
+        compressedSize,
+        preview: base64
+      };
+    }));
+    setFormData(prev => ({ ...prev, additionalImages: [...prev.additionalImages, ...base64Files] }));
+  };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -180,8 +573,13 @@ const CreateEpaper = () => {
   };
 
   const getDynamicTitle = () => {
-    return 'Main Pages';
+    return t('createEpaper.mainPages') || 'Main Pages';
   };
+
+  // Small preview pane component used in step 2
+  // Removed PreviewPane component as per user request to not show file info like name, size, dimension
+
+  // ...existing code...
 
   const renderStepContent = () => {
     switch (currentStep) {
@@ -189,32 +587,19 @@ const CreateEpaper = () => {
         return (
           <div className="space-y-4">
             <div>
-              <label htmlFor="title" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.title') || 'Title'}
-              </label>
-              <input
-                type="text"
-                id="title"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                className="input w-full"
-                placeholder="Enter epaper title"
-                required
-              />
-            </div>
-
-            <div>
               <label htmlFor="publicationDate" className="block text-sm font-medium text-black mb-2">
                 {t('createEpaper.publicationDate') || 'Publication Date'}
               </label>
               <input
-                type="date"
+                type="text"
                 id="publicationDate"
                 name="publicationDate"
-                value={formData.publicationDate}
-                onChange={handleInputChange}
+                value={displayPublicationDate || (formData.publicationDate ? format(parseISO(formData.publicationDate), 'yyyy-MM-dd') : '')}
+                onFocus={openDatePicker}
+                onClick={openDatePicker}
+                readOnly
                 className="input w-full"
+                placeholder={t('createEpaper.publicationDate') || 'Publication Date'}
                 required
               />
             </div>
@@ -232,14 +617,14 @@ const CreateEpaper = () => {
                 required
               >
                 <option value="">{t('common.select') || 'Select type'}</option>
-                <option value="daily">Daily newspaper</option>
-                <option value="special">Special Edition</option>
+                <option value="daily">{t('createEpaper.publicationTypeOptions.daily') || 'Daily newspaper'}</option>
+                <option value="special">{t('createEpaper.publicationTypeOptions.special') || 'Special Edition'}</option>
               </select>
             </div>
 
             <div>
               <label htmlFor="additionalPageName" className="block text-sm font-medium text-black mb-2">
-                Additional Page Name
+                {t('createEpaper.additionalPageName') || 'Additional Page Name'}
               </label>
               <input
                 type="text"
@@ -248,29 +633,8 @@ const CreateEpaper = () => {
                 value={formData.additionalPageName}
                 onChange={handleInputChange}
                 className="input w-full"
-                placeholder="Enter additional page name"
+                placeholder={t('createEpaper.additionalPageNamePlaceholder') || 'Enter additional page name'}
               />
-            </div>
-
-            <div>
-              <label htmlFor="category" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.category') || 'Category'}
-              </label>
-              <select
-                id="category"
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                className="input w-full"
-                required
-              >
-                <option value="">{t('common.select') || 'Select category'}</option>
-                <option value="news">News</option>
-                <option value="sports">Sports</option>
-                <option value="technology">Technology</option>
-                <option value="entertainment">Entertainment</option>
-                <option value="business">Business</option>
-              </select>
             </div>
 
             <div>
@@ -284,7 +648,7 @@ const CreateEpaper = () => {
                 value={formData.tags}
                 onChange={handleInputChange}
                 className="input w-full"
-                placeholder="Enter tags separated by commas"
+                placeholder={t('createEpaper.tagsPlaceholder') || 'Enter tags separated by commas'}
               />
             </div>
 
@@ -299,7 +663,7 @@ const CreateEpaper = () => {
                 value={formData.metaTitle}
                 onChange={handleInputChange}
                 className="input w-full"
-                placeholder="Enter meta title for SEO"
+                placeholder={t('createEpaper.metaTitlePlaceholder') || 'Enter meta title for SEO'}
               />
             </div>
 
@@ -313,7 +677,7 @@ const CreateEpaper = () => {
                 value={formData.metaDescription}
                 onChange={handleInputChange}
                 className="input w-full h-20"
-                placeholder="Enter meta description for SEO"
+                placeholder={t('createEpaper.metaDescriptionPlaceholder') || 'Enter meta description for SEO'}
               />
             </div>
 
@@ -328,32 +692,19 @@ const CreateEpaper = () => {
                 value={formData.keywords}
                 onChange={handleInputChange}
                 className="input w-full"
-                placeholder="Enter keywords separated by commas"
+                placeholder={t('createEpaper.keywordsPlaceholder') || 'Enter keywords separated by commas'}
               />
             </div>
 
-            <div>
-              <label htmlFor="slug" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.slug') || 'Slug'}
-              </label>
-              <input
-                type="text"
-                id="slug"
-                name="slug"
-                value={formData.slug}
-                onChange={handleInputChange}
-                className="input w-full"
-                placeholder="Enter URL slug"
-              />
-            </div>
+            {/* slug removed as requested */}
           </div>
         );
       case 1:
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-medium text-black mb-4">Grid 1: {getDynamicTitle()}</h3>
-              <DropZone onFilesSelected={(files) => setFormData(prev => ({ ...prev, images: [...prev.images, ...files] }))} inputId="file-input-main" />
+              <h3 className="text-lg font-medium text-black mb-4">{t('createEpaper.upload.grid1Title', { title: getDynamicTitle() }) || `Grid 1: ${getDynamicTitle()}`}</h3>
+              <DropZone onFilesSelected={handleMainFilesSelected} inputId="file-input-main" />
               <MainFileList
                 files={formData.images}
                 onRemove={(index) => setFormData(prev => ({
@@ -366,71 +717,34 @@ const CreateEpaper = () => {
                 }))}
               />
 
-              {/* Grouped metadata panels for main uploads */}
-              {imageInfos.length > 0 && (() => {
-                const { images: imgs, pdfs, others } = groupInfos(imageInfos);
-                return (
-                  <div className="mt-4 space-y-4">
-                    {imgs.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold mb-2">Images</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                          {imgs.map((info, idx) => (
-                            <div key={idx} className="flex items-center space-x-4 p-3 border rounded bg-white">
-                              <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
-                                <img src={info.preview} alt={info.name} className="w-full h-full object-contain" />
-                              </div>
-                              <div className="flex-1 text-sm">
-                                <div className="font-medium text-black truncate">{info.name}</div>
-                                <div className="text-gray-500 text-xs mt-1">Type: {info.type}</div>
-                                <div className="text-gray-500 text-xs">Size: {info.sizeMB} MB</div>
-                                <div className="text-gray-500 text-xs">Dimensions: {info.width ? `${info.width}×${info.height}` : '—'}</div>
-                                <div className="text-gray-500 text-xs">Modified: {new Date(info.lastModified).toLocaleString()}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+            {/* Removed imageInfos preview panel as per user request */}
+            {/* {imageInfos.length > 0 && (
+              <div className="mt-4 border rounded-lg p-4 bg-gray-50">
+                <h4 className="text-lg font-semibold mb-4">{t('createEpaper.upload.grid1Title', { title: getDynamicTitle() })}</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {imageInfos.map((info, idx) => (
+                    <div key={idx} className="flex items-center space-x-4 p-3 border rounded bg-white">
+                      <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
+                        <img src={info.preview} alt={info.name} className="w-full h-full object-contain" />
                       </div>
-                    )}
+                      <div className="flex-1 text-sm">
+                        <div className="font-medium text-black truncate">{info.name}</div>
+                        <div className="text-gray-500 text-xs mt-1">{t('createEpaper.meta.type') || 'Type'}: {info.type}</div>
+                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.size') || 'Size'}: {info.sizeMB} MB</div>
+                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.dimensions') || 'Dimensions'}: {info.width ? `${info.width}×${info.height}` : '—'}</div>
+                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.modified') || 'Modified'}: {new Date(info.lastModified).toLocaleString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )} */}
 
-                    {pdfs.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold mb-2">PDFs</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                          {pdfs.map((info, idx) => (
-                            <div key={idx} className="p-3 border rounded bg-white text-sm">
-                              <div className="font-medium text-black truncate">{info.name}</div>
-                              <div className="text-gray-500 text-xs mt-1">Type: {info.type}</div>
-                              <div className="text-gray-500 text-xs">Size: {info.sizeMB} MB</div>
-                              <div className="text-gray-500 text-xs">Modified: {new Date(info.lastModified).toLocaleString()}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
 
-                    {others.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold mb-2">Other Files</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                          {others.map((info, idx) => (
-                            <div key={idx} className="p-3 border rounded bg-white text-sm">
-                              <div className="font-medium text-black truncate">{info.name}</div>
-                              <div className="text-gray-500 text-xs mt-1">Type: {info.type || 'unknown'}</div>
-                              <div className="text-gray-500 text-xs">Size: {info.sizeMB} MB</div>
-                              <div className="text-gray-500 text-xs">Modified: {new Date(info.lastModified).toLocaleString()}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
             </div>
             <div>
-              <h3 className="text-lg font-medium text-black mb-4">Grid 2: Additional Pages</h3>
-              <DropZone onFilesSelected={(files) => setFormData(prev => ({ ...prev, additionalImages: [...prev.additionalImages, ...files] }))} inputId="file-input-additional" />
+              <h3 className="text-lg font-medium text-black mb-4">{t('createEpaper.upload.grid2Title') || 'Grid 2: Additional Pages'}</h3>
+              <DropZone onFilesSelected={handleAdditionalFilesSelected} inputId="file-input-additional" />
               <AdditionalFileList
                 files={formData.additionalImages}
                 onRemove={(index) => setFormData(prev => ({
@@ -443,114 +757,50 @@ const CreateEpaper = () => {
                 }))}
               />
 
-              {/* Grouped metadata panels for additional uploads */}
-              {additionalImageInfos.length > 0 && (() => {
-                const { images: imgs, pdfs, others } = groupInfos(additionalImageInfos);
-                return (
-                  <div className="mt-4 space-y-4">
-                    {imgs.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold mb-2">Images</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                          {imgs.map((info, idx) => (
-                            <div key={idx} className="flex items-center space-x-4 p-3 border rounded bg-white">
-                              <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
-                                <img src={info.preview} alt={info.name} className="w-full h-full object-contain" />
-                              </div>
-                              <div className="flex-1 text-sm">
-                                <div className="font-medium text-black truncate">{info.name}</div>
-                                <div className="text-gray-500 text-xs mt-1">Type: {info.type}</div>
-                                <div className="text-gray-500 text-xs">Size: {info.sizeMB} MB</div>
-                                <div className="text-gray-500 text-xs">Dimensions: {info.width ? `${info.width}×${info.height}` : '—'}</div>
-                                <div className="text-gray-500 text-xs">Modified: {new Date(info.lastModified).toLocaleString()}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+            {/* Removed additionalImageInfos preview panel as per user request */}
+            {/* {additionalImageInfos.length > 0 && (
+              <div className="mt-4 border rounded-lg p-4 bg-gray-50">
+                <h4 className="text-lg font-semibold mb-4">{t('createEpaper.upload.grid2Title')}</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {additionalImageInfos.map((info, idx) => (
+                    <div key={idx} className="flex items-center space-x-4 p-3 border rounded bg-white">
+                      <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
+                        <img src={info.preview} alt={info.name} className="w-full h-full object-contain" />
                       </div>
-                    )}
+                      <div className="flex-1 text-sm">
+                        <div className="font-medium text-black truncate">{info.name}</div>
+                        <div className="text-gray-500 text-xs mt-1">{t('createEpaper.meta.type') || 'Type'}: {info.type}</div>
+                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.size') || 'Size'}: {info.sizeMB} MB</div>
+                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.dimensions') || 'Dimensions'}: {info.width ? `${info.width}×${info.height}` : '—'}</div>
+                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.modified') || 'Modified'}: {new Date(info.lastModified).toLocaleString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )} */}
 
-                    {pdfs.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold mb-2">PDFs</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                          {pdfs.map((info, idx) => (
-                            <div key={idx} className="p-3 border rounded bg-white text-sm">
-                              <div className="font-medium text-black truncate">{info.name}</div>
-                              <div className="text-gray-500 text-xs mt-1">Type: {info.type}</div>
-                              <div className="text-gray-500 text-xs">Size: {info.sizeMB} MB</div>
-                              <div className="text-gray-500 text-xs">Modified: {new Date(info.lastModified).toLocaleString()}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
 
-                    {others.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold mb-2">Other Files</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                          {others.map((info, idx) => (
-                            <div key={idx} className="p-3 border rounded bg-white text-sm">
-                              <div className="font-medium text-black truncate">{info.name}</div>
-                              <div className="text-gray-500 text-xs mt-1">Type: {info.type || 'unknown'}</div>
-                              <div className="text-gray-500 text-xs">Size: {info.sizeMB} MB</div>
-                              <div className="text-gray-500 text-xs">Modified: {new Date(info.lastModified).toLocaleString()}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
             </div>
           </div>
         );
       case 2:
         return (
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="template" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.template') || 'Template'}
-              </label>
-              <select
-                id="template"
-                name="template"
-                value={formData.template}
-                onChange={handleInputChange}
-                className="input w-full"
-              >
-                <option value="default">Default</option>
-                <option value="modern">Modern</option>
-                <option value="classic">Classic</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="layoutOptions" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.layoutOptions') || 'Layout Options'}
-              </label>
-              <textarea
-                id="layoutOptions"
-                name="layoutOptions"
-                value={formData.layoutOptions}
-                onChange={handleInputChange}
-                className="input w-full h-32"
-                placeholder="Describe layout preferences..."
-              />
-            </div>
-          </div>
+          <LayoutConfiguration formData={formData} onInputChange={handleInputChange} />
         );
       case 3:
+        return (
+          <Checklist formData={formData} onInputChange={handleInputChange} />
+        );
+      case 4:
         return (
           <div className="space-y-6">
             <h3 className="text-lg font-semibold">{t('createEpaper.summary') || 'Summary'}</h3>
             <div className="bg-gray-50 p-4 rounded">
               <p><strong>{t('createEpaper.title') || 'Title'}:</strong> {formData.title}</p>
               <p><strong>{t('createEpaper.publicationDate') || 'Publication Date'}:</strong> {formData.publicationDate}</p>
-              <p><strong>{t('createEpaper.publicationType') || 'Publication Type'}:</strong> {formData.publicationType === 'daily' ? 'Daily newspaper' : formData.publicationType === 'special' ? 'Special Edition' : ''}</p>
-              <p><strong>Additional Page Name:</strong> {formData.additionalPageName || 'None'}</p>
+              <p><strong>{t('createEpaper.publicationType') || 'Publication Type'}:</strong> {formData.publicationType === 'daily' ? (t('createEpaper.publicationTypeOptions.daily') || 'Daily newspaper') : formData.publicationType === 'special' ? (t('createEpaper.publicationTypeOptions.special') || 'Special Edition') : ''}</p>
+              <p><strong>{t('createEpaper.additionalPageName') || 'Additional Page Name'}:</strong> {formData.additionalPageName || (t('common.none') || 'None')}</p>
               <p><strong>{t('createEpaper.category') || 'Category'}:</strong> {formData.category}</p>
               <p><strong>{t('createEpaper.tags') || 'Tags'}:</strong> {formData.tags}</p>
               <p><strong>{t('createEpaper.metaTitle') || 'Meta Title'}:</strong> {formData.metaTitle}</p>
@@ -564,66 +814,52 @@ const CreateEpaper = () => {
             {/* Separate Preview Panels */}
             {formData.publicationType && (
               <div className="space-y-4">
-                <h4 className="text-md font-semibold">
-                  Main Pages Preview
-                </h4>
+                <h4 className="text-md font-semibold">{t('createEpaper.summary.mainPagesPreview') || 'Main Pages Preview'}</h4>
                 {formData.images.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {formData.images.map((file, index) => (
-                      <div key={index} className="relative group">
-                        <div className="w-full h-48 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-                          <img
-                            src={URL.createObjectURL(file)}
-                            alt={`Preview ${index + 1}`}
-                            className="w-full h-full object-contain"
-                          />
+                    {imageInfos.map((info, idx) => (
+                      <div key={idx} className="border rounded bg-white p-3 flex flex-col items-center">
+                        <div className="w-full h-48 bg-gray-100 rounded overflow-hidden flex items-center justify-center mb-2">
+                          <img src={info.preview} alt={info.name} className="w-full h-full object-contain" />
                         </div>
-                        <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-2 rounded-b-lg">
-                          <p className="truncate">{file.name}</p>
-                          <p className="text-gray-300">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                        </div>
-                        <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
-                          {index + 1}
+                        <div className="w-full text-xs text-center">
+                          <div className="font-medium text-black truncate">{info.name}</div>
+                          <div className="text-gray-500">Size: {info.sizeMB} MB</div>
+                          <div className="text-gray-500">Dimensions: {info.width ? `${info.width}×${info.height}` : '—'}</div>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-gray-500">No images uploaded for {formData.publicationType === 'daily' ? 'daily pages' : 'special edition pages'}.</p>
+                  <p className="text-gray-500">{formData.publicationType === 'daily' ? (t('createEpaper.summary.noImagesDaily') || 'No images uploaded for daily pages.') : (t('createEpaper.summary.noImagesSpecial') || 'No images uploaded for special edition pages.')}</p>
                 )}
               </div>
             )}
 
             <div className="space-y-4">
-              <h4 className="text-md font-semibold">Additional Pages Preview</h4>
+              <h4 className="text-md font-semibold">{t('createEpaper.summary.additionalPagesPreview') || 'Additional Pages Preview'}</h4>
               {formData.additionalImages.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {formData.additionalImages.map((file, index) => (
-                    <div key={index} className="relative group">
-                      <div className="w-full h-48 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={`Attachment Preview ${index + 1}`}
-                          className="w-full h-full object-contain"
-                        />
+                  {additionalImageInfos.map((info, idx) => (
+                    <div key={idx} className="border rounded bg-white p-3 flex flex-col items-center">
+                      <div className="w-full h-48 bg-gray-100 rounded overflow-hidden flex items-center justify-center mb-2">
+                        <img src={info.preview} alt={info.name} className="w-full h-full object-contain" />
                       </div>
-                      <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-2 rounded-b-lg">
-                        <p className="truncate">{file.name}</p>
-                        <p className="text-gray-300">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                      </div>
-                      <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
-                        {index + 1}
+                      <div className="w-full text-xs text-center">
+                        <div className="font-medium text-black truncate">{info.name}</div>
+                        <div className="text-gray-500">Size: {info.sizeMB} MB</div>
+                        <div className="text-gray-500">Dimensions: {info.width ? `${info.width}×${info.height}` : '—'}</div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500">No additional attachments uploaded.</p>
+                <p className="text-gray-500">{t('createEpaper.summary.noAdditionalAttachments') || 'No additional attachments uploaded.'}</p>
               )}
             </div>
           </div>
         );
-      case 4:
+      case 5:
         return (
           <div className="space-y-4">
             <div>
@@ -667,7 +903,7 @@ const CreateEpaper = () => {
                 value={formData.author}
                 onChange={handleInputChange}
                 className="input w-full"
-                placeholder="Enter author name"
+                placeholder={t('createEpaper.authorPlaceholder') || 'Enter author name'}
               />
             </div>
           </div>
@@ -684,7 +920,7 @@ const CreateEpaper = () => {
           {t('epaper.createNew')}
         </h1>
         <p className="text-lg text-gray-600">
-          Create a new epaper publication
+          {t('createEpaper.pageDescription') || 'Create a new epaper publication'}
         </p>
       </div>
 
@@ -746,6 +982,39 @@ const CreateEpaper = () => {
           </div>
         </div>
       </form>
+
+      {showDatePicker && (
+        <div className="fixed inset-0 z-50 bg-white">
+          <div className="flex flex-col h-full">
+            <CalendarHeader currentMonth={calendarMonth} onPrev={prevMonth} onNext={nextMonth} />
+            <div className="grid grid-cols-7 gap-px bg-gray-200 text-center text-sm font-medium">
+              {['সোম','মঙ্গল','বুধ','বৃহস্পতি','শুক্র','শনি','রবি'].map((d, i) => (
+                <div key={i} className="bg-white p-2">{d}</div>
+              ))}
+            </div>
+            <div className="flex-1 overflow-auto p-2">
+              <div className="grid grid-cols-7 gap-2">
+                {(() => {
+                  const start = startOfWeek(startOfMonth(calendarMonth), { weekStartsOn: 1 });
+                  const end = endOfWeek(endOfMonth(calendarMonth), { weekStartsOn: 1 });
+                  const days = [];
+                  for (let d = start; d <= end; d = addDays(d, 1)) {
+                    const inMonth = isSameMonth(d, calendarMonth);
+                    const selected = formData.publicationDate && isSameDay(d, parseISO(formData.publicationDate));
+                    days.push(
+                      <DayCell key={d.toISOString()} dateObj={d} inMonth={inMonth} selected={!!selected} onPick={setDateValue} />
+                    );
+                  }
+                  return days;
+                })()}
+              </div>
+            </div>
+            <div className="p-4 border-t">
+              <button onClick={closeDatePicker} className="btn w-full">{t('common.cancel') || 'Cancel'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
