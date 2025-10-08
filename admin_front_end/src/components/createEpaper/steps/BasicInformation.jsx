@@ -1,8 +1,8 @@
 import React from 'react';
-import PropTypes from 'prop-types';
 import { useTranslation } from 'react-i18next';
+import { format, parseISO } from 'date-fns';
 
-const BasicInformation = ({ formData, onInputChange, onOpenDatePicker, displayPublicationDate }) => {
+const BasicInformation = ({ formData, handleInputChange, openDatePicker, displayPublicationDate }) => {
   const { t } = useTranslation();
 
   return (
@@ -15,9 +15,9 @@ const BasicInformation = ({ formData, onInputChange, onOpenDatePicker, displayPu
           type="text"
           id="publicationDate"
           name="publicationDate"
-          value={displayPublicationDate || formData.publicationDate}
-          onFocus={onOpenDatePicker}
-          onClick={onOpenDatePicker}
+          value={displayPublicationDate || (formData.publicationDate ? format(parseISO(formData.publicationDate), 'yyyy-MM-dd') : '')}
+          onFocus={openDatePicker}
+          onClick={openDatePicker}
           readOnly
           className="input w-full"
           placeholder={t('createEpaper.publicationDate') || 'Publication Date'}
@@ -33,7 +33,7 @@ const BasicInformation = ({ formData, onInputChange, onOpenDatePicker, displayPu
           id="publicationType"
           name="publicationType"
           value={formData.publicationType}
-          onChange={onInputChange}
+          onChange={handleInputChange}
           className="input w-full"
           required
         >
@@ -52,7 +52,7 @@ const BasicInformation = ({ formData, onInputChange, onOpenDatePicker, displayPu
           id="additionalPageName"
           name="additionalPageName"
           value={formData.additionalPageName}
-          onChange={onInputChange}
+          onChange={handleInputChange}
           className="input w-full"
           placeholder={t('createEpaper.additionalPageNamePlaceholder') || 'Enter additional page name'}
         />
@@ -67,7 +67,7 @@ const BasicInformation = ({ formData, onInputChange, onOpenDatePicker, displayPu
           id="tags"
           name="tags"
           value={formData.tags}
-          onChange={onInputChange}
+          onChange={handleInputChange}
           className="input w-full"
           placeholder={t('createEpaper.tagsPlaceholder') || 'Enter tags separated by commas'}
         />
@@ -82,7 +82,7 @@ const BasicInformation = ({ formData, onInputChange, onOpenDatePicker, displayPu
           id="metaTitle"
           name="metaTitle"
           value={formData.metaTitle}
-          onChange={onInputChange}
+          onChange={handleInputChange}
           className="input w-full"
           placeholder={t('createEpaper.metaTitlePlaceholder') || 'Enter meta title for SEO'}
         />
@@ -96,7 +96,7 @@ const BasicInformation = ({ formData, onInputChange, onOpenDatePicker, displayPu
           id="metaDescription"
           name="metaDescription"
           value={formData.metaDescription}
-          onChange={onInputChange}
+          onChange={handleInputChange}
           className="input w-full h-20"
           placeholder={t('createEpaper.metaDescriptionPlaceholder') || 'Enter meta description for SEO'}
         />
@@ -111,28 +111,13 @@ const BasicInformation = ({ formData, onInputChange, onOpenDatePicker, displayPu
           id="keywords"
           name="keywords"
           value={formData.keywords}
-          onChange={onInputChange}
+          onChange={handleInputChange}
           className="input w-full"
           placeholder={t('createEpaper.keywordsPlaceholder') || 'Enter keywords separated by commas'}
         />
       </div>
     </div>
   );
-};
-
-BasicInformation.propTypes = {
-  formData: PropTypes.shape({
-    publicationDate: PropTypes.string,
-    publicationType: PropTypes.string,
-    additionalPageName: PropTypes.string,
-    tags: PropTypes.string,
-    metaTitle: PropTypes.string,
-    metaDescription: PropTypes.string,
-    keywords: PropTypes.string
-  }).isRequired,
-  onInputChange: PropTypes.func.isRequired,
-  onOpenDatePicker: PropTypes.func.isRequired,
-  displayPublicationDate: PropTypes.string
 };
 
 export default BasicInformation;

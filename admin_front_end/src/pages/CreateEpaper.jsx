@@ -10,7 +10,6 @@ import DayCell from '../components/createEpaper/calendar/DayCell';
 
 import DropZone from '../components/createEpaper/DropZone';
 import MainFileList from '../components/createEpaper/MainFileList';
-import AdditionalFileList from '../components/createEpaper/AdditionalFileList';
 
 // Step Components
 import BasicInformation from '../components/createEpaper/steps/BasicInformation';
@@ -33,7 +32,6 @@ const CreateEpaper = () => {
     tags: '',
     content: '',
     images: [],
-    additionalImages: [],
     template: 'default',
     layoutOptions: '',
     publishDate: '',
@@ -47,7 +45,57 @@ const CreateEpaper = () => {
 
   // Derived metadata for uploaded images (main + additional)
   const [imageInfos, setImageInfos] = useState([]);
-  const [additionalImageInfos, setAdditionalImageInfos] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragCounter, setDragCounter] = useState(0);
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragCounter(prev => prev + 1);
+    if (dragCounter === 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragCounter(prev => prev - 1);
+    if (dragCounter === 1) { // Only set to false when leaving the last draggable element
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    setDragCounter(0);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setCurrentStep(1);
+      handleFilesSelected(e.dataTransfer.files);
+      e.dataTransfer.clearData();
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, []);
 
   // Fix: Ensure additionalImages do not update imageInfos (Grid 1 preview)
   useEffect(() => {
@@ -154,83 +202,7 @@ const CreateEpaper = () => {
     };
   }, [formData.images]);
 
-  // Fix: Ensure additionalImages build their own infos separately
-  useEffect(() => {
-    let created = [];
-    let cancelled = false;
 
-    const buildInfos = async () => {
-      const infos = await Promise.all(formData.additionalImages.map((file) => {
-        return new Promise((resolve) => {
-          // Check if file is a File object before creating object URL
-          if (file instanceof File) {
-            const preview = URL.createObjectURL(file);
-            created.push(preview);
-
-            const img = new Image();
-            img.onload = () => {
-              resolve({
-                name: file.name,
-                size: file.size,
-                sizeMB: (file.size / 1024 / 1024).toFixed(2),
-                type: file.type || 'unknown',
-                width: img.naturalWidth,
-                height: img.naturalHeight,
-                lastModified: file.lastModified,
-                preview
-              });
-            };
-            img.onerror = () => {
-              resolve({
-                name: file.name,
-                size: file.size,
-                sizeMB: (file.size / 1024 / 1024).toFixed(2),
-                type: file.type || 'unknown',
-                width: null,
-                height: null,
-                lastModified: file.lastModified,
-                preview
-              });
-            };
-            img.src = preview;
-          } else if (typeof file.preview === 'string' && file.preview.startsWith('data:')) {
-            // If preview is base64 string, resolve with it directly
-            resolve({
-              name: file.name || 'unknown',
-              size: file.size || 0,
-              sizeMB: '0.00',
-              type: file.type || 'unknown',
-              width: null,
-              height: null,
-              lastModified: file.lastModified || null,
-              preview: file.preview
-            });
-          } else {
-            // If not a File object or base64 string, resolve with minimal info and empty preview
-            resolve({
-              name: file.name || 'unknown',
-              size: file.size || 0,
-              sizeMB: '0.00',
-              type: file.type || 'unknown',
-              width: null,
-              height: null,
-              lastModified: file.lastModified || null,
-              preview: ''
-            });
-          }
-        });
-      }));
-
-      if (!cancelled) setAdditionalImageInfos(infos);
-    };
-
-    buildInfos();
-
-    return () => {
-      cancelled = true;
-      created.forEach((u) => URL.revokeObjectURL(u));
-    };
-  }, [formData.additionalImages]);
 
   // Full-screen datepicker state
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -512,7 +484,7 @@ const CreateEpaper = () => {
   };
 
   // Override DropZone onFilesSelected handlers to convert files to base64 before adding to formData
-  const handleMainFilesSelected = async (files) => {
+  const handleFilesSelected = async (files) => {
     const existingCount = formData.images.length;
     const base64Files = await Promise.all(Array.from(files).map(async (file, index) => {
       const base64 = await fileToBase64(file);
@@ -529,22 +501,7 @@ const CreateEpaper = () => {
     setFormData(prev => ({ ...prev, images: [...prev.images, ...base64Files] }));
   };
 
-  const handleAdditionalFilesSelected = async (files) => {
-    const existingCount = formData.additionalImages.length;
-    const base64Files = await Promise.all(Array.from(files).map(async (file, index) => {
-      const base64 = await fileToBase64(file);
-      // Calculate compressed size from base64 string
-      const compressedSize = Math.round((base64.length * 3) / 4); // Approximate size from base64
-      return {
-        ...file,
-        name: `page-${existingCount + index + 1}`,
-        originalSize: file.size,
-        compressedSize,
-        preview: base64
-      };
-    }));
-    setFormData(prev => ({ ...prev, additionalImages: [...prev.additionalImages, ...base64Files] }));
-  };
+
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -572,10 +529,6 @@ const CreateEpaper = () => {
     // Here you would typically send the data to the backend
   };
 
-  const getDynamicTitle = () => {
-    return t('createEpaper.mainPages') || 'Main Pages';
-  };
-
   // Small preview pane component used in step 2
   // Removed PreviewPane component as per user request to not show file info like name, size, dimension
 
@@ -585,204 +538,20 @@ const CreateEpaper = () => {
     switch (currentStep) {
       case 0:
         return (
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="publicationDate" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.publicationDate') || 'Publication Date'}
-              </label>
-              <input
-                type="text"
-                id="publicationDate"
-                name="publicationDate"
-                value={displayPublicationDate || (formData.publicationDate ? format(parseISO(formData.publicationDate), 'yyyy-MM-dd') : '')}
-                onFocus={openDatePicker}
-                onClick={openDatePicker}
-                readOnly
-                className="input w-full"
-                placeholder={t('createEpaper.publicationDate') || 'Publication Date'}
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="publicationType" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.publicationType') || 'Publication Type'}
-              </label>
-              <select
-                id="publicationType"
-                name="publicationType"
-                value={formData.publicationType}
-                onChange={handleInputChange}
-                className="input w-full"
-                required
-              >
-                <option value="">{t('common.select') || 'Select type'}</option>
-                <option value="daily">{t('createEpaper.publicationTypeOptions.daily') || 'Daily newspaper'}</option>
-                <option value="special">{t('createEpaper.publicationTypeOptions.special') || 'Special Edition'}</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="additionalPageName" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.additionalPageName') || 'Additional Page Name'}
-              </label>
-              <input
-                type="text"
-                id="additionalPageName"
-                name="additionalPageName"
-                value={formData.additionalPageName}
-                onChange={handleInputChange}
-                className="input w-full"
-                placeholder={t('createEpaper.additionalPageNamePlaceholder') || 'Enter additional page name'}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="tags" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.tags') || 'Tags'}
-              </label>
-              <input
-                type="text"
-                id="tags"
-                name="tags"
-                value={formData.tags}
-                onChange={handleInputChange}
-                className="input w-full"
-                placeholder={t('createEpaper.tagsPlaceholder') || 'Enter tags separated by commas'}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="metaTitle" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.metaTitle') || 'Meta Title'}
-              </label>
-              <input
-                type="text"
-                id="metaTitle"
-                name="metaTitle"
-                value={formData.metaTitle}
-                onChange={handleInputChange}
-                className="input w-full"
-                placeholder={t('createEpaper.metaTitlePlaceholder') || 'Enter meta title for SEO'}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="metaDescription" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.metaDescription') || 'Meta Description'}
-              </label>
-              <textarea
-                id="metaDescription"
-                name="metaDescription"
-                value={formData.metaDescription}
-                onChange={handleInputChange}
-                className="input w-full h-20"
-                placeholder={t('createEpaper.metaDescriptionPlaceholder') || 'Enter meta description for SEO'}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="keywords" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.keywords') || 'Keywords'}
-              </label>
-              <input
-                type="text"
-                id="keywords"
-                name="keywords"
-                value={formData.keywords}
-                onChange={handleInputChange}
-                className="input w-full"
-                placeholder={t('createEpaper.keywordsPlaceholder') || 'Enter keywords separated by commas'}
-              />
-            </div>
-
-            {/* slug removed as requested */}
-          </div>
+          <BasicInformation
+            formData={formData}
+            handleInputChange={handleInputChange}
+            openDatePicker={openDatePicker}
+            displayPublicationDate={displayPublicationDate}
+          />
         );
       case 1:
         return (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-medium text-black mb-4">{t('createEpaper.upload.grid1Title', { title: getDynamicTitle() }) || `Grid 1: ${getDynamicTitle()}`}</h3>
-              <DropZone onFilesSelected={handleMainFilesSelected} inputId="file-input-main" />
-              <MainFileList
-                files={formData.images}
-                onRemove={(index) => setFormData(prev => ({
-                  ...prev,
-                  images: prev.images.filter((_, i) => i !== index)
-                }))}
-                onReorder={(newFiles) => setFormData(prev => ({
-                  ...prev,
-                  images: newFiles
-                }))}
-              />
-
-            {/* Removed imageInfos preview panel as per user request */}
-            {/* {imageInfos.length > 0 && (
-              <div className="mt-4 border rounded-lg p-4 bg-gray-50">
-                <h4 className="text-lg font-semibold mb-4">{t('createEpaper.upload.grid1Title', { title: getDynamicTitle() })}</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {imageInfos.map((info, idx) => (
-                    <div key={idx} className="flex items-center space-x-4 p-3 border rounded bg-white">
-                      <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
-                        <img src={info.preview} alt={info.name} className="w-full h-full object-contain" />
-                      </div>
-                      <div className="flex-1 text-sm">
-                        <div className="font-medium text-black truncate">{info.name}</div>
-                        <div className="text-gray-500 text-xs mt-1">{t('createEpaper.meta.type') || 'Type'}: {info.type}</div>
-                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.size') || 'Size'}: {info.sizeMB} MB</div>
-                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.dimensions') || 'Dimensions'}: {info.width ? `${info.width}×${info.height}` : '—'}</div>
-                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.modified') || 'Modified'}: {new Date(info.lastModified).toLocaleString()}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )} */}
-
-
-            </div>
-            <div>
-              <h3 className="text-lg font-medium text-black mb-4">{t('createEpaper.upload.grid2Title') || 'Grid 2: Additional Pages'}</h3>
-              <DropZone onFilesSelected={handleAdditionalFilesSelected} inputId="file-input-additional" />
-              <AdditionalFileList
-                files={formData.additionalImages}
-                onRemove={(index) => setFormData(prev => ({
-                  ...prev,
-                  additionalImages: prev.additionalImages.filter((_, i) => i !== index)
-                }))}
-                onReorder={(newFiles) => setFormData(prev => ({
-                  ...prev,
-                  additionalImages: newFiles
-                }))}
-              />
-
-            {/* Removed additionalImageInfos preview panel as per user request */}
-            {/* {additionalImageInfos.length > 0 && (
-              <div className="mt-4 border rounded-lg p-4 bg-gray-50">
-                <h4 className="text-lg font-semibold mb-4">{t('createEpaper.upload.grid2Title')}</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {additionalImageInfos.map((info, idx) => (
-                    <div key={idx} className="flex items-center space-x-4 p-3 border rounded bg-white">
-                      <div className="w-20 h-20 bg-gray-100 rounded overflow-hidden flex items-center justify-center">
-                        <img src={info.preview} alt={info.name} className="w-full h-full object-contain" />
-                      </div>
-                      <div className="flex-1 text-sm">
-                        <div className="font-medium text-black truncate">{info.name}</div>
-                        <div className="text-gray-500 text-xs mt-1">{t('createEpaper.meta.type') || 'Type'}: {info.type}</div>
-                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.size') || 'Size'}: {info.sizeMB} MB</div>
-                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.dimensions') || 'Dimensions'}: {info.width ? `${info.width}×${info.height}` : '—'}</div>
-                        <div className="text-gray-500 text-xs">{t('createEpaper.meta.modified') || 'Modified'}: {new Date(info.lastModified).toLocaleString()}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )} */}
-
-
-            </div>
-          </div>
+          <UploadStep
+            formData={formData}
+            setFormData={setFormData}
+            handleFilesSelected={handleFilesSelected}
+          />
         );
       case 2:
         return (
@@ -794,119 +563,17 @@ const CreateEpaper = () => {
         );
       case 4:
         return (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold">{t('createEpaper.summary') || 'Summary'}</h3>
-            <div className="bg-gray-50 p-4 rounded">
-              <p><strong>{t('createEpaper.title') || 'Title'}:</strong> {formData.title}</p>
-              <p><strong>{t('createEpaper.publicationDate') || 'Publication Date'}:</strong> {formData.publicationDate}</p>
-              <p><strong>{t('createEpaper.publicationType') || 'Publication Type'}:</strong> {formData.publicationType === 'daily' ? (t('createEpaper.publicationTypeOptions.daily') || 'Daily newspaper') : formData.publicationType === 'special' ? (t('createEpaper.publicationTypeOptions.special') || 'Special Edition') : ''}</p>
-              <p><strong>{t('createEpaper.additionalPageName') || 'Additional Page Name'}:</strong> {formData.additionalPageName || (t('common.none') || 'None')}</p>
-              <p><strong>{t('createEpaper.category') || 'Category'}:</strong> {formData.category}</p>
-              <p><strong>{t('createEpaper.tags') || 'Tags'}:</strong> {formData.tags}</p>
-              <p><strong>{t('createEpaper.metaTitle') || 'Meta Title'}:</strong> {formData.metaTitle}</p>
-              <p><strong>{t('createEpaper.metaDescription') || 'Meta Description'}:</strong> {formData.metaDescription}</p>
-              <p><strong>{t('createEpaper.keywords') || 'Keywords'}:</strong> {formData.keywords}</p>
-              <p><strong>{t('createEpaper.slug') || 'Slug'}:</strong> {formData.slug}</p>
-              <p><strong>{t('createEpaper.content') || 'Content'}:</strong> {formData.content.substring(0, 100)}...</p>
-              <p><strong>{t('createEpaper.template') || 'Template'}:</strong> {formData.template}</p>
-            </div>
-
-            {/* Separate Preview Panels */}
-            {formData.publicationType && (
-              <div className="space-y-4">
-                <h4 className="text-md font-semibold">{t('createEpaper.summary.mainPagesPreview') || 'Main Pages Preview'}</h4>
-                {formData.images.length > 0 ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {imageInfos.map((info, idx) => (
-                      <div key={idx} className="border rounded bg-white p-3 flex flex-col items-center">
-                        <div className="w-full h-48 bg-gray-100 rounded overflow-hidden flex items-center justify-center mb-2">
-                          <img src={info.preview} alt={info.name} className="w-full h-full object-contain" />
-                        </div>
-                        <div className="w-full text-xs text-center">
-                          <div className="font-medium text-black truncate">{info.name}</div>
-                          <div className="text-gray-500">Size: {info.sizeMB} MB</div>
-                          <div className="text-gray-500">Dimensions: {info.width ? `${info.width}×${info.height}` : '—'}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500">{formData.publicationType === 'daily' ? (t('createEpaper.summary.noImagesDaily') || 'No images uploaded for daily pages.') : (t('createEpaper.summary.noImagesSpecial') || 'No images uploaded for special edition pages.')}</p>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <h4 className="text-md font-semibold">{t('createEpaper.summary.additionalPagesPreview') || 'Additional Pages Preview'}</h4>
-              {formData.additionalImages.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {additionalImageInfos.map((info, idx) => (
-                    <div key={idx} className="border rounded bg-white p-3 flex flex-col items-center">
-                      <div className="w-full h-48 bg-gray-100 rounded overflow-hidden flex items-center justify-center mb-2">
-                        <img src={info.preview} alt={info.name} className="w-full h-full object-contain" />
-                      </div>
-                      <div className="w-full text-xs text-center">
-                        <div className="font-medium text-black truncate">{info.name}</div>
-                        <div className="text-gray-500">Size: {info.sizeMB} MB</div>
-                        <div className="text-gray-500">Dimensions: {info.width ? `${info.width}×${info.height}` : '—'}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500">{t('createEpaper.summary.noAdditionalAttachments') || 'No additional attachments uploaded.'}</p>
-              )}
-            </div>
-          </div>
+          <PreviewAndReview
+            formData={formData}
+            imageInfos={imageInfos}
+          />
         );
       case 5:
         return (
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="publishDate" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.publishDate') || 'Publish Date'}
-              </label>
-              <input
-                type="datetime-local"
-                id="publishDate"
-                name="publishDate"
-                value={formData.publishDate}
-                onChange={handleInputChange}
-                className="input w-full"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="visibility" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.visibility') || 'Visibility'}
-              </label>
-              <select
-                id="visibility"
-                name="visibility"
-                value={formData.visibility}
-                onChange={handleInputChange}
-                className="input w-full"
-              >
-                <option value="public">{t('createEpaper.public') || 'Public'}</option>
-                <option value="private">{t('createEpaper.private') || 'Private'}</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="author" className="block text-sm font-medium text-black mb-2">
-                {t('createEpaper.author') || 'Author'}
-              </label>
-              <input
-                type="text"
-                id="author"
-                name="author"
-                value={formData.author}
-                onChange={handleInputChange}
-                className="input w-full"
-                placeholder={t('createEpaper.authorPlaceholder') || 'Enter author name'}
-              />
-            </div>
-          </div>
+          <PublishSettings
+            formData={formData}
+            handleInputChange={handleInputChange}
+          />
         );
       default:
         return null;
@@ -929,11 +596,12 @@ const CreateEpaper = () => {
         {steps.map((step, index) => (
           <div key={step.id} className="flex items-center">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+              index === 1 && isDragging ? 'bg-blue-500 text-white' :
               index <= currentStep ? 'bg-black text-white' : 'bg-gray-200 text-gray-600'
             }`}>
               {step.id}
             </div>
-            <span className={`ml-2 text-sm ${index <= currentStep ? 'text-black' : 'text-gray-500'}`}>
+            <span className={`ml-2 text-sm ${index === 1 && isDragging ? 'text-blue-500' : index <= currentStep ? 'text-black' : 'text-gray-500'}`}>
               {step.title}
             </span>
             {index < steps.length - 1 && (
@@ -1013,6 +681,27 @@ const CreateEpaper = () => {
               <button onClick={closeDatePicker} className="btn w-full">{t('common.cancel') || 'Cancel'}</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {isDragging && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontSize: '2rem',
+            zIndex: 9999,
+          }}
+        >
+          Drop here to upload
         </div>
       )}
     </div>

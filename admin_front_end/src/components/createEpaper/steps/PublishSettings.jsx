@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-const PublishSettings = ({ formData, onInputChange }) => {
+const PublishSettings = ({ formData, handleInputChange }) => {
   const { t } = useTranslation();
 
   return (
@@ -15,7 +15,7 @@ const PublishSettings = ({ formData, onInputChange }) => {
           id="publishDate"
           name="publishDate"
           value={formData.publishDate}
-          onChange={onInputChange}
+          onChange={handleInputChange}
           className="input w-full"
         />
       </div>
@@ -28,7 +28,7 @@ const PublishSettings = ({ formData, onInputChange }) => {
           id="visibility"
           name="visibility"
           value={formData.visibility}
-          onChange={onInputChange}
+          onChange={handleInputChange}
           className="input w-full"
         >
           <option value="public">{t('createEpaper.public') || 'Public'}</option>
@@ -45,7 +45,7 @@ const PublishSettings = ({ formData, onInputChange }) => {
           id="author"
           name="author"
           value={formData.author}
-          onChange={onInputChange}
+          onChange={handleInputChange}
           className="input w-full"
           placeholder={t('createEpaper.authorPlaceholder') || 'Enter author name'}
         />
